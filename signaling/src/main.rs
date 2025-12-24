@@ -1,3 +1,6 @@
-fn main() {
-    println!("Hello, world!");
+mod server;
+
+fn main(){
+    server::start_server("127.0.0.1:9000");
+
 }

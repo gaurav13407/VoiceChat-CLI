@@ -13,8 +13,13 @@ fn main(){
     match args[1].as_str(){
         "create"=>{
             let room_code=generate_room_code();
+            let mut stream=
+                std::net::TcpStream::connect("127.0.0.1:9000").expect("Cannot connect to the signaling");
+            use std::io::Write;
+            writeln!(stream, "CREATE {}",room_code).unwrap();
+
             println!("Room Created");
-            println!("Room code:{}",room_code);
+            println!("Room Code: {}",room_code);
         }
         "join"=>{
             if args.len()<3{
@@ -27,7 +32,29 @@ fn main(){
                 println!("Error:invalid room code format");
                 return;
             }
-            println!("Joining room{}...",code);
+            let mut stream=
+                std::net::TcpStream::connect("127.0.0.1:9000").expect("Cannot connect to signaling");
+
+            use std::io::{BufReader,BufRead,Write};
+            writeln!(stream, "JOIN {}",code).unwrap();
+
+            let mut reader=BufReader::new(stream);
+            let mut response=String::new();
+            reader.read_line(&mut response).unwrap();
+
+            let resp=response.trim().to_uppercase();
+
+            match resp.as_str(){
+                "ROOM_EXISTS"=>{
+                    println!("Connected to room {}",code);
+                }
+                "ROOM_NOT_FOUND"=>{
+                    println!("Error:room not found");
+                }
+                other=>{
+                    println!("Unkown server response: {:?}",other);
+                }
+            }
         }
 
         _ =>{
