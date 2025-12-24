@@ -1,0 +1,11 @@
+
+[workspace]
+members = [
+    "client",
+    "vc_core",
+    "audio",
+    "signaling",
+    "relay"
+]
+resolver = "2"
+
