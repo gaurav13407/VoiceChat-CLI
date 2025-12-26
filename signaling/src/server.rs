@@ -2,8 +2,15 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
+use base64::Engine;
 
-type Rooms = Arc<Mutex<HashMap<String, ()>>>;
+struct Peer{
+    stream:TcpStream,
+    pubkey:Vec<u8>,
+}
+
+type Rooms = Arc<Mutex<HashMap<String, Vec<Peer>>>>;
+
 
 pub fn start_server(addr: &str) {
     let listener = TcpListener::bind(addr).expect("Failed to bind signaling server");
@@ -49,18 +56,57 @@ fn handle_client(stream: TcpStream, rooms: Rooms) {
     match parts[0].to_uppercase().as_str() {
         "CREATE" => {
             let code = parts[1].to_string();
-            rooms.lock().unwrap().insert(code.clone(), ());
+            rooms.lock().unwrap().insert(code.clone(), Vec::new());
             println!("Room {} created by {}", code, peer);
             let _ = writeln!(writer, "ROOM_CREATED");
         }
 
-        "JOIN" => {
-            let code = parts[1];
-            if rooms.lock().unwrap().contains_key(code) {
-                println!("Room {} joined by {}", code, peer);
-                let _ = writeln!(writer, "ROOM_EXISTS");
-            } else {
-                let _ = writeln!(writer, "ROOM_NOT_FOUND");
+        "JOIN"=>{
+            if parts.len()<3{
+                let _=writeln!(writer, "ERROR");
+                return;
+            }
+            let code=parts[1];
+            let pubkey_b64=parts[2];
+
+            let pubkey=match base64::engine::general_purpose::STANDARD.decode(pubkey_b64){
+                Ok(pk)=>pk,
+                Err(_)=>{
+                    let _=writeln!(writer, "ERROR");
+                    return;
+                }
+            };
+
+            let mut rooms=rooms.lock().unwrap();
+
+            let room=match rooms.get_mut(code){
+                Some(r)=>r,
+                None=>{
+                    let _=writeln!(writer, "ROOM_NOT_FOUND");
+                    return;
+                }
+            };
+
+            if room.len()>=2{
+                let _=writeln!(writer, "ROOM_FULL");
+                return;
+            }
+
+            room.push(Peer{
+                stream:writer.try_clone().unwrap(),
+                pubkey,
+            });
+
+            println!("Room {} joined by {}",code,peer);
+            let _=writeln!(writer, "ROOM_JOINED");
+
+            //if second peer joined -> exchange pubkeys
+            if room.len()==2{
+                let pk1=base64::engine::general_purpose::STANDARD.encode(&room[0].pubkey);
+                let pk2=base64::engine::general_purpose::STANDARD.encode(&room[1].pubkey);
+
+                let _=writeln!(room[0].stream, "PEER_PUBKEY {}",pk2);
+                let _=writeln!(room[1].stream, "PEER_PUBKEY {}",pk1);
             }
         }
 

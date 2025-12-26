@@ -3,7 +3,16 @@ name = "client"
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
+[dependencies] 
 vc_core = { path = "../vc_core" }
 audio = { path = "../audio" }
+rand_core={version = "0.5",features=["getrandom"]}
+#Identity 
+ed25519-dalek={version="1",features=["rand"]}
+#HandShake
+x25519-dalek = "2"
+#Base64 for JOIN Public Key
+base64="0.22"
+rand = "0.9.2"
+
 
