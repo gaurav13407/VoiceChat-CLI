@@ -9,14 +9,14 @@ pub fn generate_room_code()->String{
 
     let part1:String=(0..CODE_LEN)
         .map(|_| {
-            let idx=rng.gen_range(0,CHARSET.len());
+            let idx=rng.gen_range(0..CHARSET.len());
             CHARSET[idx] as char
         })
         .collect();
 
     let part2:String=(0..CODE_LEN)
         .map(|_| {
-            let idx=rng.gen_range(0,CHARSET.len());
+            let idx=rng.gen_range(0..CHARSET.len());
             CHARSET[idx] as char
         })
         .collect();

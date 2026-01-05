@@ -11,3 +11,4 @@ pub enum ServerMessage {
     RoomExists,
     RoomNotFound,
 }
+
