@@ -111,6 +111,9 @@ Different ISPs
 NAT / CGNAT environments
 
 📁 Project Structure
+
+### Overview
+```
 VoiceChat-CLI/
 ├── client/      # CLI client (thin layer)
 ├── vc_core/     # Core logic (state machine, protocol, crypto)
@@ -118,9 +121,139 @@ VoiceChat-CLI/
 ├── signaling/   # Signaling server
 ├── relay/       # Relay server (fallback)
 └── Cargo.toml   # Workspace config
-
+```
 
 The project is library-first to keep logic testable and reusable.
+
+### Detailed Component Breakdown
+
+#### 🖥️ `/client` - Client Application
+The CLI interface that users interact with to join voice chats.
+
+**Files:**
+- `main.rs` - Entry point, handles room creation/joining commands
+- `cli.rs` - Command-line argument parsing
+- `app.rs` - Main application loop and logic
+- `host.rs` - Host-as-server mode implementation
+- `identity.rs` - User identity management (cryptographic keys)
+- `config/` - Client configuration files
+- `tests/` - Integration and session tests
+
+**Purpose:** This is what users run. It connects to the signaling server, exchanges encryption keys, establishes connections (P2P/host/relay), and manages the audio streaming pipeline.
+
+#### 🔐 `/vc_core` - Core Library
+The security and protocol foundation shared across all components.
+
+**Structure:**
+```
+vc_core/
+├── crypto/              # End-to-end encryption
+│   ├── crypto.rs       # ChaCha20-Poly1305, X25519 key exchange
+│   └── mod.rs
+├── protocol/            # Communication protocols
+│   ├── handshake.rs    # Secure handshake implementation
+│   └── mod.rs
+├── net/                 # Networking layer
+│   ├── client_handshake.rs  # Client-side handshake logic
+│   ├── host_handshek.rs     # Host-side handshake logic
+│   ├── secure_stream.rs     # Encrypted data streaming
+│   └── mod.rs
+├── room/                # Room management
+│   ├── code.rs         # Room code generation/validation
+│   └── mod.rs
+└── state/               # Connection state management
+    ├── machine.rs      # State machine for connection lifecycle
+    ├── secure_session.rs  # Secure session state
+    └── mod.rs
+```
+
+**Purpose:** Contains all security-critical code including:
+- ECDH key exchange and session key derivation
+- Authenticated encryption/decryption
+- Handshake protocol implementation
+- Secure connection state management
+- Room code logic
+
+#### 🎤 `/audio` - Audio Processing
+Low-level audio handling for voice communication.
+
+**Files:**
+- `capture.rs` - Microphone input capture
+- `playback.rs` - Speaker output playback
+- `device.rs` - Audio device enumeration and selection
+- `codec.rs` - Opus codec encoding/decoding
+
+**Purpose:** Manages the audio pipeline from microphone to network (encoding) and network to speakers (decoding). Handles device selection, buffer management, and real-time audio processing.
+
+#### 📡 `/signaling` - Signaling Server
+Lightweight matchmaking server for peer discovery.
+
+**Files:**
+- `main.rs` - Server entry point
+- `server.rs` - TCP server handling CREATE/JOIN commands
+- `room.rs` - Room state management
+- `protocol.rs` - Signaling protocol definitions
+
+**Purpose:** Acts as a rendezvous point. When users create or join rooms, this server:
+- Generates and validates room codes
+- Exchanges peer information (public keys, addresses)
+- Facilitates initial peer discovery
+
+**Important:** This server never handles voice or chat data - only connection setup metadata.
+
+#### 🔄 `/relay` - Relay Server
+Encrypted packet forwarding fallback for difficult network scenarios.
+
+**Files:**
+- `main.rs` - Server entry point
+- `server.rs` - Core relay logic
+- `forward.rs` - Packet forwarding implementation
+
+**Purpose:** Used when direct P2P or host-as-server fails due to:
+- CGNAT (Carrier-Grade NAT)
+- Strict firewall rules
+- Mobile hotspot restrictions
+- Asymmetric routing issues
+
+Forwards end-to-end encrypted packets **without decrypting them**. Acts as a dumb pipe for encrypted data.
+
+#### 🔨 `/target` - Build Artifacts
+Rust compiler output (auto-generated, not source code).
+- `debug/` - Debug builds
+- `release/` - Optimized release builds
+- `deps/` - Compiled dependencies
+
+### Component Interaction Flow
+
+```
+1. User runs CLIENT
+         ↓
+2. CLIENT connects to SIGNALING server
+         ↓
+3. SIGNALING coordinates peers (exchanges public keys & addresses)
+         ↓
+4. Clients use VC_CORE to perform cryptographic handshake
+         ↓
+5. Connection established (P2P → host-as-server → relay fallback)
+         ↓
+6. AUDIO crate captures voice from mic
+         ↓
+7. VC_CORE encrypts audio packets
+         ↓
+8. Encrypted packets sent over network
+         ↓
+9. VC_CORE decrypts received packets
+         ↓
+10. AUDIO crate plays voice through speakers
+```
+
+### Security Model
+
+- **Zero-trust servers:** Signaling and relay servers never see plaintext data
+- **End-to-end encryption:** All voice and chat encrypted before leaving client
+- **Perfect forward secrecy:** Session keys derived via ECDH, not reusable
+- **No persistent identity:** Public keys generated per-session (currently)
+- **Minimal attack surface:** CLI-only, no web interface, no plugins
 
 🛠 Tech Stack
 
