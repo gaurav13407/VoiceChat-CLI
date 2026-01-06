@@ -1,5 +1,8 @@
 use std::env;
 mod identity;
+pub mod app;
+pub mod host;
+mod cli;
 use base64::{engine::general_purpose,Engine};
 
 use vc_core::room::code::{generate_room_code,validate_room_code};

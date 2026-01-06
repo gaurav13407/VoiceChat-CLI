@@ -2,6 +2,7 @@ pub mod room;
 pub mod crypto;
 pub mod protocol;
 pub mod net;
+pub mod state;
 // If client_handshake and host_handshake are in protocol, re-export similarly:
 // pub use protocol::client_handshake;
 // pub use protocol::host_handshake;
