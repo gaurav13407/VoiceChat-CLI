@@ -29,8 +29,13 @@ pub struct SecureStream {
 
 impl SecureStream {
     pub fn new(stream: TcpStream, session: SecureSession) -> Self {
-        // Set stream to non-blocking mode to prevent deadlocks
-        stream.set_nonblocking(true).ok();
+        // Use blocking mode with timeouts to prevent deadlocks
+        // Timeouts are generous for internet connections with high latency
+        stream.set_nonblocking(false).ok();
+        stream.set_read_timeout(Some(std::time::Duration::from_millis(500))).ok();
+        stream.set_write_timeout(Some(std::time::Duration::from_secs(10))).ok();
+        // Enable TCP keepalive to detect dead connections
+        stream.set_nodelay(true).ok(); // Disable Nagle for lower latency
         Self { stream, session }
     }
 

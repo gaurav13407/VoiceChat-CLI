@@ -59,11 +59,10 @@ pub fn input_loop(stream: SecureStream, sender_id: String) -> anyhow::Result<()>
                     }
                 }
                 Err(e) => {
-                    // Check if it's a WouldBlock error (no data available)
+                    // Check if it's a timeout or WouldBlock error (no data available)
                     let e_str = format!("{:?}", e);
-                    if e_str.contains("WouldBlock") {
-                        // No data available, just continue
-                        thread::sleep(Duration::from_millis(100));
+                    if e_str.contains("WouldBlock") || e_str.contains("TimedOut") {
+                        // No data available, just continue without delay
                         continue;
                     }
                     

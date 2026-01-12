@@ -1,7 +1,8 @@
 use rand::Rng;
 
 const CODE_LEN:usize=4;
-const CHARSET:&[u8]=b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+// Removed ambiguous characters: 0/O, 1/I to prevent confusion
+const CHARSET:&[u8]=b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 ///Generate a room code like XXXX-YYYY
 pub fn generate_room_code()->String{
