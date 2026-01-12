@@ -52,9 +52,9 @@ fn main() -> anyhow::Result<()> {
                 general_purpose::STANDARD.encode(identity.public_key_bytes());
             writeln!(stream, "JOIN {} {}",code,pubkey_b64).unwrap();
 
-            let mut reader=BufReader::new(stream);
+            // Read responses line by line WITHOUT BufReader to avoid buffering issues
             let mut response=String::new();
-            reader.read_line(&mut response).unwrap();
+            read_line_unbuffered(&mut stream, &mut response)?;
 
             let resp=response.trim().to_uppercase();
 
@@ -62,11 +62,9 @@ fn main() -> anyhow::Result<()> {
                 "ROOM_EXISTS" | "ROOM_JOINED"=>{
                     println!("Connected to room {}",code);
                 
-                loop{
                     let mut line=String::new();
-                    if reader.read_line(&mut line).is_err(){
-                        break;
-                    }
+                    read_line_unbuffered(&mut stream, &mut line)?;
+                    
                     let parts:Vec<&str>=line.trim().split_whitespace().collect();
                     if parts.len()==3 && parts[0]=="PEER_PUBKEY"{
                         let peer_pubkey=general_purpose::STANDARD
@@ -84,13 +82,13 @@ fn main() -> anyhow::Result<()> {
                         //1.Perform secure handshake based on role
                         let secure_stream = if role == "CLIENT" {
                             vc_core::protocol::handshake::run(
-                                reader.into_inner(),
+                                stream,
                                 identity.public_key_bytes(),
                                 peer_pubkey_array,
                             )?
                         } else {
                             vc_core::protocol::handshake::run_as_host(
-                                reader.into_inner(),
+                                stream,
                                 identity.public_key_bytes(),
                                 peer_pubkey_array,
                             )?
@@ -104,22 +102,32 @@ fn main() -> anyhow::Result<()> {
                         return Ok(());
                     }
                 }
-            }
                 "ROOM_NOT_FOUND"=>{
                     println!("Error:room not found");
                 }
                 "ROOM_FULL"=>{
                     println!("Error:room full");
                 }
-                other=>{
-                    println!("Unkown server response: {:?}",other);
-                }
+                _=>{}
             }
         }
-
         _ =>{
             print_usage();
         }
+    }
+    Ok(())
+}
+
+fn read_line_unbuffered(stream: &mut std::net::TcpStream, line: &mut String) -> anyhow::Result<()> {
+    use std::io::Read;
+    let mut byte = [0u8; 1];
+    loop {
+        stream.read_exact(&mut byte)?;
+        let ch = byte[0] as char;
+        if ch == '\n' {
+            break;
+        }
+        line.push(ch);
     }
     Ok(())
 }
