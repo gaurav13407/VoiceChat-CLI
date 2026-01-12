@@ -109,16 +109,15 @@ fn handle_client(stream: TcpStream, rooms: Rooms) {
                 let _=writeln!(room[0].stream, "PEER_PUBKEY {} HOST",pk2);
                 let _=writeln!(room[1].stream, "PEER_PUBKEY {} CLIENT",pk1);
 
-                // Clone streams for relaying
-                let mut stream1 = room[0].stream.try_clone().unwrap();
-                let mut stream2 = room[1].stream.try_clone().unwrap();
+                // Clone streams for relaying - each direction needs independent clones
+                let stream1_read = room[0].stream.try_clone().unwrap();
+                let stream1_write = room[0].stream.try_clone().unwrap();
+                let stream2_read = room[1].stream.try_clone().unwrap();
+                let stream2_write = room[1].stream.try_clone().unwrap();
                 
                 // Start relay threads
-                let stream1_clone = stream1.try_clone().unwrap();
-                let stream2_clone = stream2.try_clone().unwrap();
-                
-                thread::spawn(move || relay_traffic(stream1_clone, stream2_clone, "1->2"));
-                thread::spawn(move || relay_traffic(stream2, stream1, "2->1"));
+                thread::spawn(move || relay_traffic(stream1_read, stream2_write, "1->2"));
+                thread::spawn(move || relay_traffic(stream2_read, stream1_write, "2->1"));
             }
         }
 
@@ -130,6 +129,7 @@ fn handle_client(stream: TcpStream, rooms: Rooms) {
 
 fn relay_traffic(mut from: TcpStream, mut to: TcpStream, label: &str) {
     let mut buf = [0u8; 8192];
+    eprintln!("[RELAY {}] Starting relay loop", label);
     loop {
         match from.read(&mut buf) {
             Ok(0) => {
@@ -137,15 +137,16 @@ fn relay_traffic(mut from: TcpStream, mut to: TcpStream, label: &str) {
                 break;
             }
             Ok(n) => {
-                eprintln!("[RELAY {}] Forwarding {} bytes", label, n);
-                if to.write_all(&buf[..n]).is_err() {
-                    eprintln!("[RELAY {}] Failed to write", label);
+                eprintln!("[RELAY {}] Read {} bytes, forwarding...", label, n);
+                if let Err(e) = to.write_all(&buf[..n]) {
+                    eprintln!("[RELAY {}] Failed to write: {}", label, e);
                     break;
                 }
-                if to.flush().is_err() {
-                    eprintln!("[RELAY {}] Failed to flush", label);
+                if let Err(e) = to.flush() {
+                    eprintln!("[RELAY {}] Failed to flush: {}", label, e);
                     break;
                 }
+                eprintln!("[RELAY {}] Successfully forwarded {} bytes", label, n);
             }
             Err(e) => {
                 eprintln!("[RELAY {}] Read error: {}", label, e);
@@ -153,5 +154,6 @@ fn relay_traffic(mut from: TcpStream, mut to: TcpStream, label: &str) {
             }
         }
     }
+    eprintln!("[RELAY {}] Exiting relay loop", label);
 }
 

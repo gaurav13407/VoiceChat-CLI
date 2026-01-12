@@ -66,9 +66,20 @@ pub fn input_loop(stream: SecureStream, sender_id: String) -> anyhow::Result<()>
                         thread::sleep(Duration::from_millis(100));
                         continue;
                     }
+                    
+                    // Handle other errors but keep receiver alive
                     eprintln!("[RECV] Error: {:?}", e);
-                    eprintln!("[RECV] Receiver thread exiting");
-                    break;
+                    
+                    // Only exit on fatal connection errors, not transient ones
+                    if e_str.contains("ConnectionReset") || e_str.contains("BrokenPipe") {
+                        eprintln!("[RECV] Fatal connection error, exiting receiver");
+                        break;
+                    }
+                    
+                    // For UnexpectedEof and other errors, just retry after a delay
+                    eprintln!("[RECV] Retrying after error...");
+                    thread::sleep(Duration::from_millis(200));
+                    continue;
                 }
             }
         }
