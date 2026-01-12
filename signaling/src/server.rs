@@ -56,10 +56,35 @@ fn handle_client(stream: TcpStream, rooms: Rooms) {
 
     match parts[0].to_uppercase().as_str() {
         "CREATE" => {
+            if parts.len() < 3 {
+                let _ = writeln!(writer, "ERROR");
+                return;
+            }
             let code = parts[1].to_string();
-            rooms.lock().unwrap().insert(code.clone(), Vec::new());
+            let pubkey_b64 = parts[2];
+
+            let pubkey = match base64::engine::general_purpose::STANDARD.decode(pubkey_b64) {
+                Ok(pk) => pk,
+                Err(_) => {
+                    let _ = writeln!(writer, "ERROR");
+                    return;
+                }
+            };
+
+            let mut rooms = rooms.lock().unwrap();
+            let room = rooms.entry(code.clone()).or_insert_with(Vec::new);
+            
+            room.push(Peer {
+                stream: writer.try_clone().unwrap(),
+                pubkey,
+            });
+            
             println!("Room {} created by {}", code, peer);
-            let _ = writeln!(writer, "ROOM_CREATED");
+            
+            // Don't send ROOM_CREATED yet - wait for second peer
+            // Block to keep connection alive
+            drop(rooms);
+            std::thread::park();
         }
 
         "JOIN"=>{

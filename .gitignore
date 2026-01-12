@@ -2,3 +2,7 @@
 **/*.rs.bk
 Cargo.lock
 .env
+
+# Identity keys - should be per-user, not in repo
+config/
+.voicechat/

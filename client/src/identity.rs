@@ -1,9 +1,14 @@
 use std::fs;
-use std::path::Path;
+use std::path::PathBuf;
 use rand_core::OsRng;
 use ed25519_dalek::{Keypair, PUBLIC_KEY_LENGTH};
 
-const ID_PATH: &str = "config/identity.key";
+fn get_identity_path() -> PathBuf {
+    let mut path = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    path.push(".voicechat");
+    path.push("identity.key");
+    path
+}
 
 pub struct Identity {
     pub keypair: Keypair,
@@ -11,8 +16,10 @@ pub struct Identity {
 
 impl Identity {
     pub fn load_or_create() -> Self {
-        if Path::new(ID_PATH).exists() {
-            let bytes = fs::read(ID_PATH).expect("Failed to load identity");
+        let id_path = get_identity_path();
+        
+        if id_path.exists() {
+            let bytes = fs::read(&id_path).expect("Failed to load identity");
 
             let keypair =
                 Keypair::from_bytes(&bytes).expect("Invalid identity keypair");
@@ -22,8 +29,8 @@ impl Identity {
             let mut rng = OsRng;
             let keypair = Keypair::generate(&mut rng);
 
-            fs::create_dir_all("config").unwrap();
-            fs::write(ID_PATH, keypair.to_bytes()).unwrap();
+            fs::create_dir_all(id_path.parent().unwrap()).unwrap();
+            fs::write(&id_path, keypair.to_bytes()).unwrap();
 
             Self { keypair }
         }
