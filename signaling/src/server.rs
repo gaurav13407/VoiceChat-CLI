@@ -109,15 +109,28 @@ fn handle_client(stream: TcpStream, rooms: Rooms) {
                 let _=writeln!(room[0].stream, "PEER_PUBKEY {} HOST",pk2);
                 let _=writeln!(room[1].stream, "PEER_PUBKEY {} CLIENT",pk1);
 
+                // Take ownership of streams from room
+                let peer1 = room.remove(0);
+                let peer2 = room.remove(0);
+                drop(rooms);
+
                 // Clone streams for relaying - each direction needs independent clones
-                let stream1_read = room[0].stream.try_clone().unwrap();
-                let stream1_write = room[0].stream.try_clone().unwrap();
-                let stream2_read = room[1].stream.try_clone().unwrap();
-                let stream2_write = room[1].stream.try_clone().unwrap();
+                let stream1_read = peer1.stream.try_clone().unwrap();
+                let stream1_write = peer1.stream.try_clone().unwrap();
+                let stream2_read = peer2.stream.try_clone().unwrap();
+                let stream2_write = peer2.stream.try_clone().unwrap();
                 
                 // Start relay threads
                 thread::spawn(move || relay_traffic(stream1_read, stream2_write, "1->2"));
                 thread::spawn(move || relay_traffic(stream2_read, stream1_write, "2->1"));
+                
+                // Keep original streams alive
+                thread::spawn(move || {
+                    let _keep = (peer1.stream, peer2.stream);
+                    std::thread::park();
+                });
+                
+                return; // Don't drop writer
             }
         }
 
