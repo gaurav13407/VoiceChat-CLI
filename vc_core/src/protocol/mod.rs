@@ -1,3 +1,3 @@
 pub mod handshake;
-
+pub mod chat;
 // ...existing code...

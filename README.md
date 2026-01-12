@@ -1,52 +1,119 @@
 # VoiceChat-CLI
 
-A lightweight, private, end-to-end encrypted voice + chat application built in Rust, designed for low latency, low resource usage, and small private groups.
+A lightweight, private, end-to-end encrypted chat application built in Rust for low latency and small private groups.
 
-This project is intentionally CLI-based and minimal.
-The goal is correctness, performance, and learning, not UI polish.
+## 🚀 Quick Start
 
-🎯 Motivation
+### Build
+```bash
+cargo build --release
+```
 
-Modern voice apps are heavy, centralized, and resource-hungry.
-For gaming and private communication, this often means:
+### Run Signaling Server
+```bash
+./target/release/signaling
+# Listening on 127.0.0.1:9000
+```
 
-High RAM/CPU usage
+### Create a Room
+```bash
+./target/release/client create
+# Output: Room Code: XXXX-YYYY
+```
 
-Unnecessary latency
+### Join a Room
+```bash
+./target/release/client join XXXX-YYYY
+```
 
-No true end-to-end privacy
+### Chat Commands
+- `/msg <text>` - Send a message
+- `/exit` - Leave the room
 
-Dependence on always-on third-party servers
+## 🌐 Test Online
 
-This project explores a different approach:
+Set the server address via environment variable:
 
-Peer-to-peer first
+```bash
+# Start signaling server
+./target/release/signaling
 
-Host-based when possible
+# Create room with custom server
+SERVER_ADDR="your-server-ip:9000" ./target/release/client create
 
-Relay only when necessary
+# Join room with custom server
+SERVER_ADDR="your-server-ip:9000" ./target/release/client join XXXX-YYYY
+```
 
-End-to-end encrypted by default
+## 🎯 Features
 
-The result is a tool that works well for friends who just want to talk while playing games, without slowing their system down.
+🔐 **End-to-End Encrypted** - ChaCha20-Poly1305 AEAD encryption  
+💬 **Text Chat** - Secure encrypted messaging  
+👥 **Private Rooms** - Invite code based access  
+🔄 **Relay Server** - Works through NAT/firewalls  
+⚡ **Low Latency** - Direct TCP connections
 
-✨ Key Features (MVP)
+## 📦 Architecture
 
-🔐 End-to-End Encrypted voice
+- **Signaling Server** - Coordinates peer connections and relays traffic
+- **Client** - Command-line chat interface
+- **VC Core** - Cryptography and protocol implementation
+  - X25519 key exchange
+  - Ed25519 identity keys
+  - ChaCha20-Poly1305 encryption
 
-💬 Encrypted text chat
+## 🛠️ Technical Details
 
-👥 Small private rooms (invite code based)
+### Handshake Protocol
+1. Client sends ephemeral X25519 public key
+2. Host responds with ephemeral X25519 public key
+3. Diffie-Hellman key exchange
+4. Derive shared secret
+5. All messages encrypted with ChaCha20-Poly1305
 
-🔄 Hybrid networking:
+### Message Format
+```
+[2 bytes: length][encrypted payload]
+```
 
-Direct P2P when possible
+## 🔧 Development
 
-Host-as-server fallback
+### Run in Debug Mode
+```bash
+cargo build
+./target/debug/signaling &
+./target/debug/client create
+```
 
-Relay fallback for strict networks (CGNAT, mobile hotspot)
+### Project Structure
+```
+├── signaling/    # Signaling & relay server
+├── client/       # CLI client application
+├── vc_core/      # Core crypto & protocol
+└── audio/        # Audio capture/playback (WIP)
+```
 
-⚡ Low latency (UDP-based)
+## 📝 Errors Fixed
+
+All compilation errors resolved:
+- ✅ Added missing `anyhow` dependencies
+- ✅ Fixed path separator syntax (`::` instead of `:`)
+- ✅ Fixed handshake role coordination (HOST/CLIENT)
+- ✅ Implemented message relay in signaling server
+- ✅ Fixed non-blocking I/O deadlock issues
+- ✅ Added proper error handling throughout
+
+## 🎯 Motivation
+
+Modern chat apps are heavy and centralized. This project explores:
+- Peer-to-peer architecture
+- Minimal resource usage
+- True end-to-end encryption
+- No dependence on third-party servers
+
+## 📄 License
+
+MIT
 
 🧠 Minimal CPU & RAM usage
 

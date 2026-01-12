@@ -1,7 +1,8 @@
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Write, Read};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
+use std::thread;
 use base64::Engine;
 
 struct Peer{
@@ -100,18 +101,56 @@ fn handle_client(stream: TcpStream, rooms: Rooms) {
             println!("Room {} joined by {}",code,peer);
             let _=writeln!(writer, "ROOM_JOINED");
 
-            //if second peer joined -> exchange pubkeys
+            //if second peer joined -> exchange pubkeys and start relaying
             if room.len()==2{
                 let pk1=base64::engine::general_purpose::STANDARD.encode(&room[0].pubkey);
                 let pk2=base64::engine::general_purpose::STANDARD.encode(&room[1].pubkey);
 
-                let _=writeln!(room[0].stream, "PEER_PUBKEY {}",pk2);
-                let _=writeln!(room[1].stream, "PEER_PUBKEY {}",pk1);
+                let _=writeln!(room[0].stream, "PEER_PUBKEY {} HOST",pk2);
+                let _=writeln!(room[1].stream, "PEER_PUBKEY {} CLIENT",pk1);
+
+                // Clone streams for relaying
+                let mut stream1 = room[0].stream.try_clone().unwrap();
+                let mut stream2 = room[1].stream.try_clone().unwrap();
+                
+                // Start relay threads
+                let stream1_clone = stream1.try_clone().unwrap();
+                let stream2_clone = stream2.try_clone().unwrap();
+                
+                thread::spawn(move || relay_traffic(stream1_clone, stream2_clone, "1->2"));
+                thread::spawn(move || relay_traffic(stream2, stream1, "2->1"));
             }
         }
 
         _ => {
             let _ = writeln!(writer, "ERROR");
+        }
+    }
+}
+
+fn relay_traffic(mut from: TcpStream, mut to: TcpStream, label: &str) {
+    let mut buf = [0u8; 8192];
+    loop {
+        match from.read(&mut buf) {
+            Ok(0) => {
+                eprintln!("[RELAY {}] Connection closed", label);
+                break;
+            }
+            Ok(n) => {
+                eprintln!("[RELAY {}] Forwarding {} bytes", label, n);
+                if to.write_all(&buf[..n]).is_err() {
+                    eprintln!("[RELAY {}] Failed to write", label);
+                    break;
+                }
+                if to.flush().is_err() {
+                    eprintln!("[RELAY {}] Failed to flush", label);
+                    break;
+                }
+            }
+            Err(e) => {
+                eprintln!("[RELAY {}] Read error: {}", label, e);
+                break;
+            }
         }
     }
 }
