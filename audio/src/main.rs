@@ -3,24 +3,43 @@ use crossbeam_channel::{bounded, TryRecvError};
 
 const FRAME_MS: usize = 20;
 const BUFFER_FRAMES: usize = 3;
+const VOLUME_GAIN: f32 = 2.0; // Amplify volume
 
 fn main() {
     let host = cpal::default_host();
 
-    let input = host
-        .input_devices()
-        .unwrap()
-        .find(|d| d.name().unwrap().contains("pipewire"))
-        .expect("No pipewire input");
+    // List all available input devices
+    println!("Available input devices:");
+    let device_list: Vec<_> = host.input_devices().unwrap().collect();
+    for (i, device) in device_list.iter().enumerate() {
+        let name = device.name().unwrap();
+        println!("  [{}] {}", i, name);
+    }
+
+    // Use pulse - it routes to whatever is the active recording device in pavucontrol
+    let input = device_list
+        .iter()
+        .find(|d| {
+            let name = d.name().unwrap().to_lowercase();
+            name == "pulse" || name == "default"
+        })
+        .expect("No input device available")
+        .clone();
 
     let output = host
-        .output_devices()
-        .unwrap()
-        .find(|d| d.name().unwrap().contains("pipewire"))
-        .expect("No pipewire output");
+        .default_output_device()
+        .expect("No output device available");
 
-    println!("Using input  : {}", input.name().unwrap());
+    println!("\nUsing input  : {}", input.name().unwrap());
     println!("Using output : {}", output.name().unwrap());
+    println!("\n=== IMPORTANT ===");
+    println!("While this program is running:");
+    println!("1. Open pavucontrol (run 'pavucontrol' in another terminal)");
+    println!("2. Go to the 'Recording' tab");
+    println!("3. Find this program ('ALSA plug-in')"); 
+    println!("4. Select your headphone: 'Family 17h/19h HD Audio Controller Analog Stereo'");
+    println!("5. Speak into your headphone - you should hear yourself!");
+    println!("================\n");
 
     let input_cfg = input.default_input_config().unwrap();
     let output_cfg = output.default_output_config().unwrap();
@@ -34,11 +53,19 @@ fn main() {
     let frame_samples = sample_rate * FRAME_MS / 1000;
 
     println!("Sample rate   : {}", sample_rate);
+    println!("Input channels: {}", in_channels);
+    println!("Output channels: {}", out_channels);
     println!("Frame samples : {}", frame_samples);
 
-    let stream_config = cpal::StreamConfig {
+    let input_stream_config = cpal::StreamConfig {
         channels: in_channels as u16,
         sample_rate: input_cfg.sample_rate(),
+        buffer_size: cpal::BufferSize::Default,
+    };
+
+    let output_stream_config = cpal::StreamConfig {
+        channels: out_channels as u16,
+        sample_rate: output_cfg.sample_rate(),
         buffer_size: cpal::BufferSize::Default,
     };
 
@@ -49,7 +76,8 @@ fn main() {
             run_f32(
                 input,
                 output,
-                stream_config,
+                input_stream_config,
+                output_stream_config,
                 out_channels,
                 frame_samples,
                 tx,
@@ -60,7 +88,8 @@ fn main() {
             run_i16(
                 input,
                 output,
-                stream_config,
+                input_stream_config,
+                output_stream_config,
                 out_channels,
                 frame_samples,
                 tx,
@@ -76,7 +105,8 @@ fn main() {
 fn run_f32(
     input: cpal::Device,
     output: cpal::Device,
-    config: cpal::StreamConfig,
+    input_config: cpal::StreamConfig,
+    output_config: cpal::StreamConfig,
     out_channels: usize,
     frame_samples: usize,
     tx: crossbeam_channel::Sender<Vec<f32>>,
@@ -85,16 +115,19 @@ fn run_f32(
     let mut capture_acc: Vec<f32> = Vec::new();
     let mut playback_acc: Vec<f32> = Vec::new();
     let tx_cap = tx.clone();
+    let mut frames_sent = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let frames_sent_clone = frames_sent.clone();
 
     let input_stream = input
         .build_input_stream(
-            &config,
+            &input_config,
             move |data: &[f32], _| {
-                let channels = config.channels as usize;
+                let channels = input_config.channels as usize;
 
                 for frame in data.chunks(channels) {
                     let sum: f32 = frame.iter().sum();
-                    capture_acc.push(sum / channels as f32);
+                    let sample = (sum / channels as f32) * VOLUME_GAIN;
+                    capture_acc.push(sample.clamp(-1.0, 1.0));
                 }
 
                 while capture_acc.len() >= frame_samples {
@@ -110,7 +143,7 @@ fn run_f32(
 
     let output_stream = output
         .build_output_stream(
-            &config,
+            &output_config,
             move |out: &mut [f32], _| {
                 let mut written = 0;
 
@@ -158,7 +191,8 @@ fn run_f32(
 fn run_i16(
     input: cpal::Device,
     output: cpal::Device,
-    config: cpal::StreamConfig,
+    input_config: cpal::StreamConfig,
+    output_config: cpal::StreamConfig,
     out_channels: usize,
     frame_samples: usize,
     tx: crossbeam_channel::Sender<Vec<f32>>,
@@ -167,19 +201,22 @@ fn run_i16(
     let mut capture_acc: Vec<f32> = Vec::new();
     let mut playback_acc: Vec<f32> = Vec::new();
     let tx_cap = tx.clone();
+    let mut frames_sent = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let frames_sent_clone = frames_sent.clone();
 
     let input_stream = input
         .build_input_stream(
-            &config,
+            &input_config,
             move |data: &[i16], _| {
-                let channels = config.channels as usize;
+                let channels = input_config.channels as usize;
 
                 for frame in data.chunks(channels) {
                     let mut sum = 0.0;
                     for s in frame {
                         sum += *s as f32 / i16::MAX as f32;
                     }
-                    capture_acc.push(sum / channels as f32);
+                    let sample = (sum / channels as f32) * VOLUME_GAIN;
+                    capture_acc.push(sample.clamp(-1.0, 1.0));
                 }
 
                 while capture_acc.len() >= frame_samples {
@@ -195,7 +232,7 @@ fn run_i16(
 
     let output_stream = output
         .build_output_stream(
-            &config,
+            &output_config,
             move |out: &mut [i16], _| {
                 let mut written = 0;
 
