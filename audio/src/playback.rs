@@ -1,4 +1,4 @@
-use cpal::traits::{DeviceTrait,Hosttrait,StreamTrait};
+use cpal::traits::{DeviceTrait,HostTrait,StreamTrait};
 use crossbeam_channel::{Receiver,TryRecvError};
 
 //start audio playback from received audio frame 
@@ -15,7 +15,7 @@ pub fn start_playback(rx:Receiver<Vec<f32>>){
 
     println!("Playback device:{}",output.name().unwrap());
     println!("Playback format:{:?}",cfg.sample_format());
-    println!("PLayback rate: {}",cfg.sample_format().0);
+    println!("PLayback rate: {}",cfg.sample_rate().0);
     println!("Playback chans :{}",cfg.channels());
 
 
@@ -79,7 +79,7 @@ fn write_output(
             }
         }
 
-        let frame=(out.len()-written)/channels;
+        let frames=(out.len()-written)/channels;
         let n=frames.min(acc.len());
 
         for i in 0..n{

@@ -1,9 +1,11 @@
+mod buffer;
+mod voice;
+mod upd;
+mod playback;
+
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use crossbeam_channel::{bounded, TryRecvError};
+use crossbeam_channel::bounded;
 use std::env;
-use std::net::UdpSocket;
-use std::thread;
-use std::time::Duration;
 
 /* ================= CONFIG ================= */
 
@@ -26,12 +28,6 @@ fn main() {
     let sender_id: u32 = args[1].parse().unwrap();
     let send_addr = &args[2];
     let recv_bind = &args[3];
-
-    let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    send_socket.connect(send_addr).unwrap();
-
-    let recv_socket = UdpSocket::bind(recv_bind).unwrap();
-    recv_socket.set_nonblocking(true).unwrap();
 
     let host = cpal::default_host();
 
@@ -62,6 +58,20 @@ fn main() {
     println!("Send to        : {}", send_addr);
     println!("Recv bind      : {}", recv_bind);
 
+    let (tx_play, rx_play) = bounded::<Vec<f32>>(BUFFER_FRAMES);
+
+    /* ================= UDP NETWORK ================= */
+    
+    // Start UDP networking with jitter buffer
+    let mut udp_handle = upd::start_udp(
+        sender_id,
+        send_addr,
+        recv_bind,
+        tx_play.clone(),
+    );
+
+    /* ================= INPUT STREAM (CAPTURE & SEND) ================= */
+
     let input_config = cpal::StreamConfig {
         channels: channels as u16,
         sample_rate: input_cfg.sample_rate(),
@@ -74,53 +84,7 @@ fn main() {
         buffer_size: cpal::BufferSize::Default,
     };
 
-    let (tx_play, rx_play) = bounded::<Vec<f32>>(BUFFER_FRAMES);
-
-    /* ================= NETWORK RECEIVE THREAD ================= */
-
-    {
-        let tx = tx_play.clone();
-        thread::spawn(move || {
-            let mut buf = [0u8; 65536];
-
-            loop {
-                match recv_socket.recv(&mut buf) {
-                    Ok(n) => {
-                        let mut off = 0;
-
-                        let pkt_sender =
-                            u32::from_le_bytes(buf[off..off + 4].try_into().unwrap());
-                        off += 4;
-
-                        if pkt_sender == sender_id {
-                            continue; // drop self
-                        }
-
-                        let len =
-                            u32::from_le_bytes(buf[off..off + 4].try_into().unwrap())
-                                as usize;
-                        off += 4;
-
-                        let mut frame = Vec::with_capacity(len);
-                        for _ in 0..len {
-                            let s =
-                                f32::from_le_bytes(buf[off..off + 4].try_into().unwrap());
-                            off += 4;
-                            frame.push(s);
-                        }
-
-                        let _ = tx.try_send(frame);
-                    }
-                    Err(_) => thread::sleep(Duration::from_millis(1)),
-                }
-            }
-        });
-    }
-
-    /* ================= INPUT STREAM (SEND ONLY) ================= */
-
     let mut capture_acc: Vec<f32> = Vec::new();
-    let send_socket = send_socket.try_clone().unwrap();
 
     let input_stream = input
         .build_input_stream(
@@ -135,15 +99,9 @@ fn main() {
                 while capture_acc.len() >= frame_samples {
                     let frame: Vec<f32> =
                         capture_acc.drain(..frame_samples).collect();
-
-                    let mut pkt = Vec::with_capacity(8 + frame.len() * 4);
-                    pkt.extend_from_slice(&sender_id.to_le_bytes());
-                    pkt.extend_from_slice(&(frame.len() as u32).to_le_bytes());
-                    for s in frame {
-                        pkt.extend_from_slice(&s.to_le_bytes());
-                    }
-
-                    let _ = send_socket.send(&pkt);
+                    
+                    // Send frame using UDP handle with VoicePacket encoding
+                    udp_handle.send_frame(frame);
                 }
             },
             err_fn,
@@ -151,16 +109,18 @@ fn main() {
         )
         .unwrap();
 
-    /* ================= OUTPUT STREAM (RECV ONLY) ================= */
+    /* ================= OUTPUT STREAM (PLAYBACK) ================= */
 
     let mut playback_acc: Vec<f32> = Vec::new();
+    let out_channels = output_config.channels as usize;
 
     let output_stream = output
         .build_output_stream(
             &output_config,
             move |out: &mut [f32], _| {
+                use crossbeam_channel::TryRecvError;
+                
                 let mut written = 0;
-                let out_channels = output_config.channels as usize;
 
                 while written < out.len() {
                     if playback_acc.is_empty() {
@@ -205,4 +165,3 @@ fn main() {
 fn err_fn(err: cpal::StreamError) {
     eprintln!("Stream error: {}", err);
 }
-

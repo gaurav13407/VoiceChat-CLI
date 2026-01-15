@@ -12,7 +12,7 @@ impl JitterBuffer{
     //start_seq
     //capacity=max frame to hold 
     pub fn new(start_seq:u32,capacity:usize)->Self{
-        Slef{
+        Self{
             buffer:BTreeMap::new(),
             next_seq:start_seq,
             capacity,
@@ -27,9 +27,10 @@ impl JitterBuffer{
             return;
         }
         //Prevent unbounded growth 
-        while self.buffer.len()>self.capacity{
+        while self.buffer.len()>=self.capacity{
             self.buffer.pop_first();
         }
+        self.buffer.insert(seq, frame);
     }
 
     //POp the next in order-frame 

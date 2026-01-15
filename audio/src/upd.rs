@@ -5,7 +5,7 @@ use std::time::Duration;
 use crossbeam_channel::Sender;
 
 use crate::buffer::JitterBuffer;
-use crate::time::voice::VoicePacket;
+use crate::voice::VoicePacket;
 
 //startup UDP networking:
 //send audio frame
@@ -38,8 +38,8 @@ pub fn start_udp(
         let mut jitter:Option<JitterBuffer>=None;
 
         loop{
-            match recv_socket(&mut buf){
-                Ok(n)=>{
+            match recv_socket.recv_from(&mut buf){
+                Ok((n,_))=>{
                     if let Some(pkt)=VoicePacket::decode(&buf[..n]){
                         //Drop our own packets
                         if pkt.sender_id==sender_id{
@@ -90,7 +90,7 @@ impl UdpHandle{
             samples,
         };
 
-        let data=pkt.encoded();
+        let data=pkt.encode();
         let _=self.socket.send(&data);
 
         self.seq=self.seq.wrapping_add(1);
