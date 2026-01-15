@@ -71,6 +71,23 @@ fn main() -> anyhow::Result<()> {
 
                 println!("Secure connection established!");
 
+                // Generate UDP ports for voice based on role
+                let (my_voice_port, peer_voice_port, my_sender_id) = if role == "CLIENT" {
+                    (9001u16, 9002u16, 1u32)  // Client = ID 1
+                } else {
+                    (9002u16, 9001u16, 2u32)  // Host = ID 2
+                };
+
+                // Start voice session
+                let voice_send_addr = format!("127.0.0.1:{}", peer_voice_port);
+                let voice_recv_bind = format!("0.0.0.0:{}", my_voice_port);
+                
+                let _voice_session = audio::VoiceSession::start(
+                    my_sender_id,
+                    &voice_send_addr,
+                    &voice_recv_bind,
+                )?;
+
                 //2. Start Chat Here
                 let sender_id = general_purpose::STANDARD.encode(identity.public_key_bytes());
                 cli::input_loop(secure_stream, sender_id)?;
@@ -139,6 +156,23 @@ fn main() -> anyhow::Result<()> {
                         };
 
                         println!("Secure connection established!");
+
+                        // Generate UDP ports for voice based on role
+                        let (my_voice_port, peer_voice_port, my_sender_id) = if role == "CLIENT" {
+                            (9001u16, 9002u16, 1u32)  // Client = ID 1
+                        } else {
+                            (9002u16, 9001u16, 2u32)  // Host = ID 2
+                        };
+
+                        // Start voice session
+                        let voice_send_addr = format!("127.0.0.1:{}", peer_voice_port);
+                        let voice_recv_bind = format!("0.0.0.0:{}", my_voice_port);
+                        
+                        let _voice_session = audio::VoiceSession::start(
+                            my_sender_id,
+                            &voice_send_addr,
+                            &voice_recv_bind,
+                        )?;
 
                         //2. Start Chat Here
                         let sender_id = general_purpose::STANDARD.encode(identity.public_key_bytes());

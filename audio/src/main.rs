@@ -68,7 +68,7 @@ fn main() {
         send_addr,
         recv_bind,
         tx_play.clone(),
-    );
+    )?;
 
     /* ================= INPUT STREAM (CAPTURE & SEND) ================= */
 

@@ -1,48 +1,58 @@
-pub struct VoicePacket{
-    pub sender_id:u32,
-    pub seq:u32,
-    pub samples:Vec<f32>,
+/// VoicePacket represents one encoded Opus frame
+pub struct VoicePacket {
+    pub sender_id: u32,
+    pub seq: u32,
+    pub payload: Vec<u8>, // Opus data
 }
 
-impl VoicePacket{
-    pub fn encode(&self)->Vec<u8>{
-        let mut buf=Vec::with_capacity(12+self.samples.len()*4);
+impl VoicePacket {
+    /// Encode packet for UDP
+    ///
+    /// Format:
+    /// [u32 sender_id]
+    /// [u32 seq]
+    /// [u32 payload_len]
+    /// [u8 payload...]
+    pub fn encode(&self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(12 + self.payload.len());
 
         buf.extend_from_slice(&self.sender_id.to_le_bytes());
         buf.extend_from_slice(&self.seq.to_le_bytes());
-        buf.extend_from_slice(&(self.samples.len() as u32).to_le_bytes());
-        
-        for &sample in &self.samples{
-            buf.extend_from_slice(&sample.to_le_bytes());
-        }
-        
+        buf.extend_from_slice(&(self.payload.len() as u32).to_le_bytes());
+        buf.extend_from_slice(&self.payload);
+
         buf
     }
-    pub fn decode(buf:&[u8])->Option<Self>{
-        if buf.len()<12{
+
+    pub fn decode(buf: &[u8]) -> Option<Self> {
+        if buf.len() < 12 {
             return None;
         }
-        
-        let sender_id=u32::from_le_bytes([buf[0],buf[1],buf[2],buf[3]]);
-        let seq=u32::from_le_bytes([buf[4],buf[5],buf[6],buf[7]]);
-        let len=u32::from_le_bytes([buf[8],buf[9],buf[10],buf[11]]) as usize;
-        
-        if buf.len()<12+len*4{
+
+        let mut off = 0;
+
+        let sender_id =
+            u32::from_le_bytes(buf[off..off + 4].try_into().ok()?);
+        off += 4;
+
+        let seq =
+            u32::from_le_bytes(buf[off..off + 4].try_into().ok()?);
+        off += 4;
+
+        let len =
+            u32::from_le_bytes(buf[off..off + 4].try_into().ok()?) as usize;
+        off += 4;
+
+        if buf.len() < off + len {
             return None;
         }
-        
-        let mut samples=Vec::with_capacity(len);
-        for i in 0..len{
-            let offset=12+i*4;
-            let sample=f32::from_le_bytes([
-                buf[offset],
-                buf[offset+1],
-                buf[offset+2],
-                buf[offset+3],
-            ]);
-            samples.push(sample);
-        }
-        
-        Some(Self{sender_id,seq,samples})
+
+        let payload = buf[off..off + len].to_vec();
+
+        Some(Self {
+            sender_id,
+            seq,
+            payload,
+        })
     }
 }

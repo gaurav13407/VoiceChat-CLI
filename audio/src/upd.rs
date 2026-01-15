@@ -3,6 +3,7 @@ use std::thread;
 use std::time::Duration;
 
 use crossbeam_channel::Sender;
+use opus::{Application, Channels, Encoder, Decoder};
 
 use crate::buffer::JitterBuffer;
 use crate::voice::VoicePacket;
@@ -17,25 +18,26 @@ pub fn start_udp(
     sender_addr:&str,
     recv_bind:&str,
     playback_tx:Sender<Vec<f32>>,
-)->UdpHandle{
-    let send_socket=UdpSocket::bind("0.0.0.0:0")
-        .expect("Failed to connect send socket");
-    send_socket
-        .connect(sender_addr)
-        .expect("Failed to connect send socket");
-    let recv_socket=UdpSocket::bind(recv_bind)
-        .expect("Failed to bind recv  socket");
-    recv_socket
-        .set_nonblocking(true)
-        .expect("Failed to set nonblocking");
+)->anyhow::Result<UdpHandle>{
+    let send_socket=UdpSocket::bind("0.0.0.0:0")?;
+    send_socket.connect(sender_addr)?;
+    
+    let recv_socket=UdpSocket::bind(recv_bind)?;
+    recv_socket.set_nonblocking(true)?;
 
-    let recv_socket=recv_socket.try_clone().unwrap();
+    let recv_socket=recv_socket.try_clone()?;
 
 
     //Receiver thread 
     thread::spawn(move ||{
         let mut buf=[0u8;65536];
         let mut jitter:Option<JitterBuffer>=None;
+        
+        // Create Opus decoder
+        let mut decoder = Decoder::new(
+            48_000,
+            Channels::Mono,
+        ).expect("Failed to create Opus decoder");
 
         loop{
             match recv_socket.recv_from(&mut buf){
@@ -45,8 +47,16 @@ pub fn start_udp(
                         if pkt.sender_id==sender_id{
                             continue;
                         }
+                        
+                        // Decode Opus to PCM
+                        let mut pcm = vec![0f32; 960]; // 20 ms @ 48kHz
+                        let decoded = decoder
+                            .decode_float(&pkt.payload, &mut pcm, false)
+                            .unwrap_or(0);
+                        pcm.truncate(decoded);
+                        
                         let jb=jitter.get_or_insert_with(|| JitterBuffer::new(pkt.seq,3));
-                        jb.push(pkt.seq,pkt.samples);
+                        jb.push(pkt.seq, pcm);
 
                         //Drain ready Frame 
                         while let Some(frame)=jb.pop(){
@@ -63,13 +73,19 @@ pub fn start_udp(
         }
     });
 
-    UdpHandle{
+    // Create Opus encoder (48kHz for CD-quality audio)
+    let encoder = Encoder::new(
+        48_000,
+        Channels::Mono,
+        Application::Voip,
+    )?;
+
+    Ok(UdpHandle{
         sender_id,
         socket:send_socket,
         seq:0,
-    }
-
-
+        encoder,
+    })
 }
 
 
@@ -79,20 +95,34 @@ pub struct UdpHandle{
     sender_id:u32,
     socket:UdpSocket,
     seq:u32,
+    encoder:Encoder,
 }
 
 impl UdpHandle{
     //Send one audio frame over UDP 
-    pub fn send_frame(&mut self,samples:Vec<f32>){
-        let pkt=VoicePacket{
-            sender_id:self.sender_id,
-            seq:self.seq,
-            samples,
+    pub fn send_frame(&mut self, mut pcm: Vec<f32>) {
+        // Opus at 48kHz expects 960 samples for 20ms
+        // We get 882 samples @ 44.1kHz, so pad with zeros
+        while pcm.len() < 960 {
+            pcm.push(0.0);
+        }
+        pcm.truncate(960);
+        
+        let mut out = vec![0u8; 4000]; // enough for any Opus frame
+
+        let len = self.encoder
+            .encode_float(&pcm, &mut out)
+            .expect("Opus encode failed");
+
+        out.truncate(len);
+
+        let pkt = VoicePacket {
+            sender_id: self.sender_id,
+            seq: self.seq,
+            payload: out,
         };
 
-        let data=pkt.encode();
-        let _=self.socket.send(&data);
-
-        self.seq=self.seq.wrapping_add(1);
+        let _ = self.socket.send(&pkt.encode());
+        self.seq = self.seq.wrapping_add(1);
     }
 }
