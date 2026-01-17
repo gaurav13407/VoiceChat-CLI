@@ -348,21 +348,44 @@ Learn networking by building real systems
 
 Accept real-world constraints (NAT, CGNAT, firewalls)
 
-🚧 Project Status
 
-Active development (MVP phase)
+## 🚧 Project Status
 
-Current focus:
+This project is currently **feature-complete and closed for active development**.
 
-CLI commands
+The following components are fully implemented and stable:
 
-Room code generation
+- End-to-end encrypted peer-to-peer text chat
+- Secure identity and handshake (Ed25519, X25519, HKDF, AEAD)
+- Room-based signaling and peer discovery
+- Local voice streaming pipeline (tested and functional)
 
-Signaling logic
+### ⚠️ Known Limitations
 
-Secure connection setup
+Peer-to-peer encrypted voice over the public internet requires:
 
+- Dedicated relay / TURN infrastructure, or
+- Advanced NAT traversal and echo cancellation
 
+Due to limited infrastructure resources, a public voice relay server is not hosted.
+
+## 🤝 Contributions
+
+Contributions are welcome specifically for:
+
+- Improving the peer-to-peer encrypted voice pipeline
+- Echo cancellation and jitter handling
+- NAT traversal (STUN/TURN–like mechanisms)
+- Alternative deployment strategies for voice channels
+
+If you have experience in real-time audio or P2P networking, feel free to open an issue or submit a pull request.
+
+## 🧠 Motivation
+
+This project was built as a learning-focused systems and networking experiment.
+The cryptographic core and messaging system are complete; further work requires infrastructure and long-term maintenance beyond the current scope.
+
+---
 
 ⚠️ Disclaimer
 
