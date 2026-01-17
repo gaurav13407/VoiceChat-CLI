@@ -15,14 +15,14 @@ const VOLUME_GAIN: f32 = 1.5;
 
 /* ================= MAIN ================= */
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     if args.len() != 4 {
         eprintln!("Usage:");
         eprintln!("  <sender_id> <send_addr> <recv_bind>");
         eprintln!("Example:");
         eprintln!("  1 127.0.0.1:9002 0.0.0.0:9001");
-        return;
+        return Ok(());
     }
 
     let sender_id: u32 = args[1].parse().unwrap();
@@ -158,6 +158,7 @@ fn main() {
 
     println!("Voice chat running. Press ENTER to stop.");
     let _ = std::io::stdin().read_line(&mut String::new());
+    Ok(())
 }
 
 /* ================= ERROR ================= */
