@@ -351,43 +351,36 @@ Accept real-world constraints (NAT, CGNAT, firewalls)
 
 ## 🚧 Project Status
 
-This project is currently **feature-complete and closed for active development**.
+This project is **feature-complete and closed for active development**.
 
 The following components are fully implemented and stable:
 
 - End-to-end encrypted peer-to-peer text chat
-- Secure identity and handshake (Ed25519, X25519, HKDF, AEAD)
+- Secure handshake and session establishment (Ed25519, X25519, HKDF, AEAD)
 - Room-based signaling and peer discovery
-- Local voice streaming pipeline (tested and functional)
+- Local voice streaming pipeline (tested in controlled environments)
 
 ### ⚠️ Known Limitations
 
-Peer-to-peer encrypted voice over the public internet requires:
+Real-time peer-to-peer encrypted voice over the public internet requires:
 
-- Dedicated relay / TURN infrastructure, or
-- Advanced NAT traversal and echo cancellation
+- Dedicated relay or TURN infrastructure
+- Advanced NAT traversal techniques
+- Echo cancellation and adaptive jitter buffering
 
-Due to limited infrastructure resources, a public voice relay server is not hosted.
-
-## 🤝 Contributions
-
-Contributions are welcome specifically for:
-
-- Improving the peer-to-peer encrypted voice pipeline
-- Echo cancellation and jitter handling
-- NAT traversal (STUN/TURN–like mechanisms)
-- Alternative deployment strategies for voice channels
-
-If you have experience in real-time audio or P2P networking, feel free to open an issue or submit a pull request.
-
-## 🧠 Motivation
-
-This project was built as a learning-focused systems and networking experiment.
-The cryptographic core and messaging system are complete; further work requires infrastructure and long-term maintenance beyond the current scope.
+Due to limited infrastructure resources, a public voice relay server is **not hosted**.
+As a result, internet-scale voice communication is considered experimental.
 
 ---
 
-⚠️ Disclaimer
+## 🤝 Contributions
 
-This is an educational and experimental project.
-It is not intended for large-scale production use.
+Contributions are welcome **specifically** for:
+
+- Improving the encrypted voice pipeline
+- Echo cancellation and jitter buffer design
+- NAT traversal (STUN/TURN–like mechanisms)
+- Alternative deployment or relay strategies
+
+If you have experience in real-time audio or P2P networking, feel free to open an issue or submit a pull request.
+
